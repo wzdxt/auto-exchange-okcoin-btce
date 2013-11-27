@@ -19,7 +19,7 @@ class BTCEApi():
 	LTC_RUR = 'ltc_rur'
 	LTC_EUR = 'ltc_eur'
 	USD_RUR = 'usd_rur'
-	EUR_USD = 'uer_usd'
+	EUR_USD = 'eur_usd'
 	def __init__(self, key, secret):
 		self.public_api = '/api/2'
 		self.key = key

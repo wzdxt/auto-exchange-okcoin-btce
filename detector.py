@@ -1,81 +1,109 @@
 #!/d/python27/python
 # -*- coding: utf8 -*-
 
+from __future__ import division
+
 from btceapi import BTCEApi
+from marketreader import MarketReader
 import threading
+import copy
+import time
 
 class Detector():
-	def __init__(self, key, secret):
-		self.key = key
-		self.secret = secret
-		
-	def find_best_route(self, coins={}):
-		rate = self.__get_all_rate()
+	def find_best_route(self, market, coins={}):
+		rate = self.__get_all_rate(market)
+		if __debug__:
+			print rate
 
 		coin_best = {}
-		max_benefit = -1
+		max_benefit = [0, []]
 		best = ''
 		for coin in coins:
-			coin_best[coin] = find_best_route_ignore_amount(rate, coin)
-			if coin_best[coin][0] > max:
-				max_benefit = coin_best[coin][0]
+			if coins[coin] == 0:
+				continue
+			coin_best[coin] = self.find_best_route_ignore_amount(rate, coin)
+			if coin_best[coin][0] > max_benefit[0]:
+				max_benefit = coin_best[coin]
 				best = coin
-		if max_benefit > 1.01
+			if __debug__:
+				print '* best for %s: %s' % (coin, coin_best[coin][1])
+				print '* best for %s: %s' % (coin, coin_best[coin][0])
+		if __debug__:
+			print '** best route:', max_benefit[1]
+			print '** best route:', max_benefit[0]
+
 		for coin in coins:
 			if coin == best:
-				if get_best_route_benefit(coin, coin_best[coin][1] coins[coin]) > 1.01:
+				if self.__get_best_route_benefit(market, coin_best[coin][1], coins[coin]) > 1:
 					return (coin, coin_best[coin])
 		return None
 	
-	def find_best_route_ignore_amount(rate, name):
-		return (best benefit, route)
+	def find_best_route_ignore_amount(self, rate, name):
+		max_benefit = {'btc':0, 'ltc':0, 'usd':0, 'eur':0}
+		max_benefit[name] = 1
+		(best_benefit, route) = RouteUtil(rate).find_best_coin_route(name, name, [name],  max_benefit)
+		return (best_benefit, route)
 
-	def get_best_route_benefit(self, route, amount):
-		return fact benefit
-
-
-	def __get_all_rate(self):
-		rate={'buy':{'bu' : -1, 'be' : -1, 'lb' : -1, 'lu' : -1, 'le' : -1, 'eu' : -1}, 'sell':{'bu' : -1, 'be' : -1, 'lb' : -1, 'lu' : -1, 'le' : -1, 'eu' : -1}}
-#		rate={'buy':{'bu' : -1, 'br' : -1, 'be' : -1, 'lb' : -1, 'lu' : -1, 'lr' : -1, 'le' : -1, 'ur' : -1, 'eu' : -1}, 'sell':{'bu' : -1, 'br' : -1, 'be' : -1, 'lb' : -1, 'lu' : -1, 'lr' : -1, 'le' : -1, 'ur' : -1, 'eu' : -1}}
-		apis = []
-		for i in range(0, 9):
-			apis.append(BTCEApi(self.key, self.secret))
-
-		read_threads = []
-		read_threads.append(threading.Thread(target=self.__get_rate, args=(apis[0], rate, BTCEApi.BTC_USD, 'bu')))
-#		read_threads.append(threading.Thread(target=self.__get_rate, args=(apis[1], rate, BTCEApi.BTC_RUR, 'br')))
-		read_threads.append(threading.Thread(target=self.__get_rate, args=(apis[2], rate, BTCEApi.BTC_EUR, 'be')))
-		read_threads.append(threading.Thread(target=self.__get_rate, args=(apis[3], rate, BTCEApi.LTC_BTC, 'lb')))
-		read_threads.append(threading.Thread(target=self.__get_rate, args=(apis[4], rate, BTCEApi.LTC_USD, 'lu')))
-#		read_threads.append(threading.Thread(target=self.__get_rate, args=(apis[5], rate, BTCEApi.LTC_RUR, 'lr')))
-		read_threads.append(threading.Thread(target=self.__get_rate, args=(apis[6], rate, BTCEApi.LTC_EUR, 'le')))
-		read_threads.append(threading.Thread(target=self.__get_rate, args=(apis[7], rate, BTCEApi.USD_RUR, 'ur')))
-#		read_threads.append(threading.Thread(target=self.__get_rate, args=(apis[8], rate, BTCEApi.EUR_USD, 'eu')))
-
-		for thread in read_threads:
-			thread.start()
-		for thread in read_threads:
-			thread.join()
-
+	def __get_best_route_benefit(self, market, route, amount):
+		rate = 1
+		for i in range(0, len(route)-1):
+			if route[i][0] + route[i+1][0] in market:
+				pair_key = route[i][0] + route[i+1][0]
+				next_rate = self.get_rate_consider_amount(market[pair_key]['bids'], amount, 'sell')
+				rate = rate * next_rate * 0.998
+				amount = amount * next_rate * 0.998
+			else:
+				pair_key = route[i+1][0] + route[i][0]
+				next_rate = 1/self.get_rate_consider_amount(market[pair_key]['asks'], amount, 'buy')
+				rate = rate * next_rate * 0.998
+				amount = amount * next_rate * 0.998
 		return rate
 
-	def __get_rate(self, api, rate, pair, pair_key, total=0):
-		depth = api.get_depth(pair)
-		if total is 0:
-			rate['buy'][pair_key] = depth['asks'][0][0]
-			rate['sell'][pair_key] = depth['bids'][0][0]
+	def get_rate_consider_amount(self, depth, amount, type):
+		total = 0
+		for d in depth:
+			if type == 'sell':
+				total = total + d[1]
+			else:
+				total = total + d[0] * d[1]
+			if total >= amount * 2:
+				return d[0]
+		print type
+		print amount
+		print depth
+
+	def __get_all_rate(self, market):
+		rate={'buy':{'bu' : -1, 'be' : -1, 'lb' : -1, 'lu' : -1, 'le' : -1, 'eu' : -1}, 'sell':{'bu' : -1, 'be' : -1, 'lb' : -1, 'lu' : -1, 'le' : -1, 'eu' : -1}}
+
+		for pair_key in market:
+			rate['buy'][pair_key] = market[pair_key]['asks'][0][0]
+			rate['sell'][pair_key] = market[pair_key]['bids'][0][0]
+
+		return rate
 
 class RouteUtil():
 	def __init__(self, rate):
 		self.rate = rate
 
-	def find_best_coin_route(start_coin, now_coin, route, max_benefit, rate):
+	def find_best_coin_route(self, start_coin, now_coin, route, max_benefit):
+		if __debug__:
+			print 'come to coin:', now_coin
+			print 'route:', route
 		if start_coin == now_coin and len(route) > 2:
-			return max_benefit[start_coin]
+			if __debug__:
+				print 'go back'
+			return (max_benefit[start_coin], route)
+		if len(route) > 5:
+			if __debug__:
+				print 'go back'
+			return (-1, route)
 		ret = -1
 		rate = -1
+		best_next_coin = (-1, [])
 		for next_coin in ('btc', 'ltc', 'usd', 'eur'):
-			if now_coin is next_coin:
+			if __debug__:
+				print 'try: %s -> %s' % (now_coin,  next_coin)
+			if now_coin == next_coin:
 				continue
 			elif now_coin == 'btc':
 				if next_coin == 'usd':
@@ -107,20 +135,62 @@ class RouteUtil():
 			elif now_coin == 'eur':
 				if next_coin == 'btc':
 					rate = 1/self.rate['buy']['be']
-				if next_coin == 'ltc':
+				elif next_coin == 'ltc':
 					rate = 1/self.rate['buy']['le']
-				if next_coin == 'usd':
+				elif next_coin == 'usd':
 					rate = self.rate['sell']['eu']
 				else:
 					raise Exception('unknow coin name: ' + next_coin)
 			else:
 				raise Exception('unknow coin name: ' + now_coin)
-		rate = rate * 0.998
 
-		for next_coin in ('btc', 'ltc', 'usd', 'eur'):
-			try next coin
+			(benefit, res_route) = self.try_next(start_coin, now_coin, next_coin, rate*0.998, route, max_benefit)
+			if benefit > best_next_coin[0]:
+				best_next_coin = (benefit, res_route)
+		if __debug__:
+			print 'go back'
+		return best_next_coin
+
+	def try_next(self, start_coin, now_coin, next_coin, rate, route, max_benefit):
+		new_route = copy.copy(route)
+		new_route.append(next_coin)
+		next_benefit = max_benefit[now_coin] * rate
+		if next_benefit <= max_benefit[next_coin]:
+			if __debug__:
+				print 'try failed'
+			return (-1, new_route)
+		max_benefit[next_coin] = next_benefit
+		if __debug__:
+			print 'max benefit:', max_benefit
+		return self.find_best_coin_route(start_coin, next_coin, new_route, max_benefit)
+
 
 if __name__ == '__main__':
 	import key
-	d = Detector(key.key, key.secret)
-	print d.find_best_route()
+	d = Detector()
+	res = []
+	funds = {'btc':1, 'ltc':0, 'usd':0, 'eur':0}
+	mr = MarketReader(key.key, key.secret)
+	while True:
+		t = '[%s]' % (time.strftime('%H:%M:%S', time.localtime(time.time())))
+		market = mr.get_all_market()
+		if market == None:
+			continue
+		find_res = d.find_best_route(market, funds)
+		if find_res is not None:
+			res.append((t, find_res))
+			route = find_res[1]
+			if route[0][0] + route[1][0] in market:
+				pair_key = route[0][0] + route[1][0]
+				rate = market[pair_key]['bids'][0][0]
+			else:
+				pair_key = route[1][0] + route[0][0]
+				rate = 1/market[pair_key]['asks'][0][0]
+			funds[route[1]] = funds[route[0]] * rate
+			funds[route[0]] = 0
+
+			print t, find_res
+			print t, funds
+		else:
+			print t, 'no route found'
+		time.sleep(10)

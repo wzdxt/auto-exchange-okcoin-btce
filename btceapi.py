@@ -6,11 +6,10 @@ import json
 import hashlib
 import hmac
 import urllib
-
-
+import time
 
 class BTCEApi():
-	nonce = 0
+	nonce = int(time.time())
 	BTC_USD = 'btc_usd'
 	BTC_RUR = 'btc_rur'
 	BTC_EUR = 'btc_eur'
@@ -53,8 +52,27 @@ class BTCEApi():
 		return hmac.new(self.secret, params, hashlib.sha512).hexdigest()
 	
 	def get_info(self):
-		params = {}
-		params['method'] = 'getInfo'
+		params = {'method': 'getInfo'}
+		return self.__private_request(params)
+	
+	def cancel_order(self, order_id):
+		params = {'method': 'CancelOrder'}
+		params['order_id'] = order_id
+		return self.__private_request(params)
+	
+	def trade(self, pair, type, rate, amount):
+		params = {'method': 'Trade'}
+		params['pair'] = pair
+		params['type'] = type
+		params['rate'] = rate
+		params['amount'] = amount
+		return self.__private_request(params)
+	
+	def get_order_list(self):
+		params = {'method': 'OrderList'}
+		return self.__private_request(params)
+	
+	def __private_request(self, params):
 		nonce = self.__get_nonce()
 		params['nonce'] = nonce
 		params = urllib.urlencode(params)
@@ -66,4 +84,13 @@ class BTCEApi():
 		conn.request('POST', '/tapi', params, headers)
 		response = conn.getresponse()
 
-		return response
+		if response.status == 200:
+			resp_dict = json.loads(response.read())
+			if resp_dict['success'] == 0:
+				print 'api fails:', resp_dict['error']
+				return None
+			return resp_dict['return']
+		else:
+			print 'status:', response.status
+			print 'reason:', response.reason
+			return None

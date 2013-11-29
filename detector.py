@@ -9,7 +9,10 @@ import threading
 import copy
 import time
 
+AMOUNT_C = 0
+
 class Detector():
+	min_coin = {'usd':3, 'eur':3, 'btc':0.01, 'ltc':0.1}
 	def find_best_route(self, market, coins={}):
 		rate = self.__get_all_rate(market)
 		if __debug__:
@@ -19,10 +22,10 @@ class Detector():
 		max_benefit = [0, []]
 		best = ''
 		for coin in coins:
-			if coins[coin] == 0:
+			if coins[coin] < self.min_coin[coin]:
 				continue
 			coin_best[coin] = self.find_best_route_ignore_amount(rate, coin)
-			if coin_best[coin][0] > max_benefit[0]:
+			if len(coin_best[coin][1]) > 3 and coin_best[coin][0] > max_benefit[0]:
 				max_benefit = coin_best[coin]
 				best = coin
 			if __debug__:
@@ -66,7 +69,7 @@ class Detector():
 				total = total + d[1]
 			else:
 				total = total + d[0] * d[1]
-			if total >= amount * 2:
+			if total >= amount * AMOUNT_C:
 				return d[0]
 		print type
 		print amount

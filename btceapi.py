@@ -30,7 +30,7 @@ class BTCEApi():
 	
 	def __send_public_request(self, pair, item):
 		conn = httplib.HTTPSConnection('btc-e.com')
-		conn.request('POST', '%s/%s/%s' % (self.public_api, pair, item))
+		conn.request('GET', '%s/%s/%s' % (self.public_api, pair, item))
 		response = conn.getresponse()
 		if response.status == 200:
 			resp_dict = json.loads(response.read())
@@ -78,7 +78,7 @@ class BTCEApi():
 		params = urllib.urlencode(params)
 
 		sign = self.__get_hashed_params(params)
-		headers = {'Sign' : sign, 'Key' : self.key, 'Content-type' : 'application/x-www-form-urlencoded', 'User-Agent': 'Mozilla/4.0 (Windows; U; Windows NT 5.0; en-US; rv:1.9.1.6) Gecko/20091201 Firefox/3.5.6'}
+		headers = {'Sign' : sign, 'Key' : self.key, 'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/31.0.1650.57 Safari/537.36'}
 
 		conn = httplib.HTTPSConnection('btc-e.com')
 		conn.request('POST', '/tapi', params, headers)

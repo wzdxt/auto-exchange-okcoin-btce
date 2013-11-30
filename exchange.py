@@ -6,7 +6,6 @@ from __future__ import division
 import time
 import math
 
-import key
 from btceapi import BTCEApi
 from detector import Detector
 from marketreader import MarketReader
@@ -16,6 +15,8 @@ STATUS_START_BUY = 2
 STATUS_BUYING = 3
 
 def run(key, secret):
+	print
+	print 'start running ...'
 	detector = Detector()
 	market_reader = MarketReader(key, secret)
 	api = BTCEApi(key, secret)
@@ -24,45 +25,69 @@ def run(key, secret):
 
 	status = STATUS_LOOK
 
-	look_sleep_time = 2
+	look_sleep_time = 0.1
+	exception_sleep_time = 1
 	
 	while True:
-		if status == STATUS_LOOK:
-			market = market_reader.get_all_market()
-			if market is not None:
-				step = get_next_step(funds, market)
-				if step is not None:
-					status = STATUS_START_BUY
+		try:
 			if status == STATUS_LOOK:
-				print '[%s] no route found' % get_time_str()
-				time.sleep(look_sleep_time)
-				look_sleep_time = math.sqrt(look_sleep_time/10) * 10
-			else:
-				look_sleep_time = 2
-		if status == STATUS_START_BUY:
-			if step[0][0] + step[1][0] in market:
-				pair_key = step[0][0] + step[1][0]
-				type = 'sell'
-				next_rate = detector.get_rate_consider_amount(market[pair_key]['bids'], funds[step[0]], type)
-				amount = funds[step[0]]
-			else:
-				pair_key = step[1][0] + step[0][0]
-				type = 'buy'
-				next_rate = detector.get_rate_consider_amount(market[pair_key]['asks'], funds[step[0]], type)
-				amount = funds[step[0]]/next_rate
-			pair = get_pair(pair_key)
+				market = market_reader.get_all_market()
+				if market is not None:
+					step = get_next_step(funds, market)
+					if step is not None:
+						status = STATUS_START_BUY
+				if status == STATUS_LOOK:
+					print '[%s] no route found' % get_time_str()
+					time.sleep(look_sleep_time)
+					look_sleep_time = math.sqrt(look_sleep_time/5) * 5
+				else:
+					look_sleep_time = 0.1
+			if status == STATUS_START_BUY:
+				if step[0][0] + step[1][0] in market:
+					pair_key = step[0][0] + step[1][0]
+					type = 'sell'
+					next_rate = detector.get_rate_consider_amount(market[pair_key]['bids'], funds[step[0]], type)
+					amount = funds[step[0]]
+				else:
+					pair_key = step[1][0] + step[0][0]
+					type = 'buy'
+					next_rate = detector.get_rate_consider_amount(market[pair_key]['asks'], funds[step[0]], type)
+					amount = funds[step[0]]/next_rate
+				pair = get_pair(pair_key)
 
-			amount = round(amount - 0.000000004, 8)
-			order_id = trade(api, pair, type, next_rate, amount)
-			if order_id is not None:
-				status = STATUS_BUYING
-			else:
+				amount = round(amount - 0.000000005 * 0.998, 8)
+				order_id = trade(api, pair, type, next_rate, amount)
+				if order_id is not None:
+					status = STATUS_BUYING
+				else:
+					status = STATUS_LOOK
+			if status == STATUS_BUYING:
+				new_funds = cancel_order(api, order_id)
+				if new_funds is None:
+					funds = get_new_funds(funds, pair, type, next_rate, amount)
+				else:
+					funds = new_funds
 				status = STATUS_LOOK
-		if status == STATUS_BUYING:
-			funds = cancel_order(api, order_id)
-			if funds is None:
-				funds = get_funds(api)
-			status = STATUS_LOOK
+			exception_sleep_time = 1
+		except Exception, e:
+			print 'exception:,', e
+			time.sleep(exception_sleep_time)
+			exception_sleep_time = math.sqrt(exception_sleep_time/10) * 10
+
+def get_new_funds(old_funds, pair, type, rate, amount):
+	coin1 = pair[:3]
+	coin2 = pair[-3:]
+	funds = old_funds
+
+	if type == 'sell':
+		funds[coin1] = funds[coin1] - amount
+		funds[coin2] = funds[coin2] + amount * rate * 0.998
+	else:
+		funds[coin1] = funds[coin1] + amount * 0.998
+		funds[coin2] = funds[coin2] - amount * rate
+	print '[%s] %s' % (get_time_str(), funds)
+	return funds
+		
 
 def cancel_order(api, order_id):
 	if order_id == 0:
@@ -138,4 +163,5 @@ def get_pair(pair_key):
 		'eu': BTCEApi.EUR_USD,}[pair_key]
 
 if __name__ == '__main__':
+	import key
 	run(key.key, key.secret)

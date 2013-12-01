@@ -25,7 +25,7 @@ def run(key, secret):
 
 	status = STATUS_LOOK
 
-	look_sleep_time = 0.1
+	look_sleep_time = 1
 	exception_sleep_time = 1
 	
 	while True:

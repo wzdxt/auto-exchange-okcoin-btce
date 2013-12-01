@@ -15,16 +15,22 @@ def test_thread(key, secret):
 			print 'it is debug'
 		time.sleep(1.1)
 
+def exchange_thread(key, secret):
+	while True:
+		try:
+			exchange.run(key, secret)
+		except Exception, e:
+			print 'xxx catch exception in auto shell xxx'
+			print e
+
 if __name__ == '__main__':
 	import key
 
-	while True:
-#		exchange_thread = threading.Thread(target=test_thread, args=(key.key, key.secret))
-		exchange_thread = threading.Thread(target=exchange.run, args=(key.key, key.secret))
-		exchange_thread.setDaemon(True)
-		exchange_thread.start()
+	exchange_thread = threading.Thread(target=exchange_thread, args=(key.key, key.secret))
+	exchange_thread.setDaemon(True)
+	exchange_thread.start()
 
-		time.sleep(60*5)
-		
-		python = sys.executable
-		os.execl(python, python, '-O', *sys.argv)
+	time.sleep(60*5)
+	
+	python = sys.executable
+	os.execl(python, python, '-O', *sys.argv)

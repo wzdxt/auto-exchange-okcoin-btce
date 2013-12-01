@@ -27,9 +27,12 @@ class BTCEApi():
 	def __get_nonce(self):
 		BTCEApi.nonce = BTCEApi.nonce + 1
 		return BTCEApi.nonce
+
+	def __set_nonce(self, nonce):
+		BTCEApi.nonce = nonce
 	
 	def __send_public_request(self, pair, item):
-		conn = httplib.HTTPSConnection('btc-e.com')
+		conn = httplib.HTTPSConnection('btc-e.com', timeout = 10)
 		conn.request('GET', '%s/%s/%s' % (self.public_api, pair, item))
 		response = conn.getresponse()
 		if response.status == 200:
@@ -48,8 +51,8 @@ class BTCEApi():
 	def get_depth(self, pair):
 		return self.__send_public_request(pair, 'depth')
 
-	def __get_hashed_params(self, params):
-		return hmac.new(self.secret, params, hashlib.sha512).hexdigest()
+	def __get_hashed_params(self, encoded_params):
+		return hmac.new(self.secret, encoded_params, hashlib.sha512).hexdigest()
 	
 	def get_info(self):
 		params = {'method': 'getInfo'}
@@ -73,24 +76,34 @@ class BTCEApi():
 		return self.__private_request(params)
 	
 	def __private_request(self, params):
-		nonce = self.__get_nonce()
-		params['nonce'] = nonce
-		params = urllib.urlencode(params)
+		try:
+			nonce = self.__get_nonce()
+			params['nonce'] = nonce
+			encoded_params = urllib.urlencode(params)
 
-		sign = self.__get_hashed_params(params)
-		headers = {'Sign' : sign, 'Key' : self.key, 'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/31.0.1650.57 Safari/537.36'}
+			sign = self.__get_hashed_params(encoded_params)
+			headers = {'Sign' : sign, 'Key' : self.key, 'Content-type': 'application/x-www-form-urlencoded'}
 
-		conn = httplib.HTTPSConnection('btc-e.com')
-		conn.request('POST', '/tapi', params, headers)
-		response = conn.getresponse()
+			conn = httplib.HTTPSConnection('btc-e.com', timeout = 10)
+			conn.request('POST', '/tapi', encoded_params, headers)
+			response = conn.getresponse()
 
-		if response.status == 200:
-			resp_dict = json.loads(response.read())
-			if resp_dict['success'] == 0:
-				print 'api fails:', resp_dict['error']
+			if response.status == 200:
+				resp_dict = json.loads(response.read())
+				if resp_dict['success'] == 0:
+					err_message = resp_dict['error']
+					print 'api fails:', err_message
+					if "invalid nonce" in err_message:
+						s = err_message.split(",")
+						expected = int(s[-2].split(":")[1])
+						self.__set_nonce(expected - 1)
+						return self.__private_request(params)
+					else:
+						return None
+				return resp_dict['return']
+			else:
+				print 'status:', response.status
+				print 'reason:', response.reason
 				return None
-			return resp_dict['return']
-		else:
-			print 'status:', response.status
-			print 'reason:', response.reason
-			return None
+		finally:
+			conn.close()
